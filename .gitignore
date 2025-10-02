@@ -136,6 +136,7 @@ dmypy.json
 test_*
 temp_*
 *.tmp
+sub2trans_config.json
 
 # Mac specific
 .DS_Store

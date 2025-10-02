@@ -1,12 +1,41 @@
 #!/usr/bin/env python3
 """
-SRT to Markdown Converter
+Sub2Trans - Convert subtitle files to well-formatted transcripts
 
-Converts SRT subtitle files to well-formatted Markdown with:
-- Paragraph grouping based on timing and content
-- Timestamp markers for paragraph starts
-- Automatic headline and subheadline generation
-- Clean, readable formatting
+Copyright (c) 2024, Sub2Trans Contributors
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Converts subtitle files to well-formatted transcripts with:
+- Multi-format subtitle support (SRT, VTT, ASS, SSA, SBV, TTML, SAMI, LRC)
+- Multi-platform video integration (YouTube, Vimeo, Twitch, etc.)
+- AI-enhanced paragraph grouping and headline generation
+- Multiple output formats (Markdown, HTML, PDF, DOCX, RTF)
+- Configuration system with multiple AI provider support
 """
 
 import re
@@ -23,9 +52,147 @@ from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
 from tqdm import tqdm
 from urllib.parse import urlparse, parse_qs
+from pathlib import Path
 
 # Global verbosity setting
 VERBOSE = False
+
+
+class ConfigManager:
+    """Manages configuration file loading and AI provider settings"""
+    
+    def __init__(self, config_path: Optional[str] = None):
+        self.config_path = config_path or self._get_default_config_path()
+        self.config = self._load_config()
+    
+    def _get_default_config_path(self) -> str:
+        """Get the default configuration file path in user's home directory"""
+        home_dir = Path.home()
+        config_file = home_dir / "sub2trans_config.json"
+        return str(config_file)
+    
+    def _load_config(self) -> Dict:
+        """Load configuration from file or create default"""
+        if os.path.exists(self.config_path):
+            try:
+                with open(self.config_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except Exception as e:
+                log(f"Error loading config file: {e}", "ERROR")
+                return self._get_default_config()
+        else:
+            # Create default config file
+            default_config = self._get_default_config()
+            try:
+                os.makedirs(os.path.dirname(self.config_path), exist_ok=True)
+                with open(self.config_path, 'w', encoding='utf-8') as f:
+                    json.dump(default_config, f, indent=2)
+                log(f"Created default config file: {self.config_path}")
+            except Exception as e:
+                log(f"Error creating config file: {e}", "ERROR")
+            return default_config
+    
+    def _get_default_config(self) -> Dict:
+        """Get default configuration"""
+        return {
+            "ai_providers": {
+                "lm_studio": {
+                    "enabled": True,
+                    "base_url": "http://localhost:1234",
+                    "default_model": "qwen/qwen3-4b-2507",
+                    "timeout": 120,
+                    "max_retries": 3
+                },
+                "openai": {
+                    "enabled": False,
+                    "api_key": "",
+                    "base_url": "https://api.openai.com/v1",
+                    "default_model": "gpt-3.5-turbo",
+                    "timeout": 60,
+                    "max_retries": 3
+                },
+                "anthropic": {
+                    "enabled": False,
+                    "api_key": "",
+                    "base_url": "https://api.anthropic.com",
+                    "default_model": "claude-3-haiku-20240307",
+                    "timeout": 60,
+                    "max_retries": 3
+                },
+                "grok": {
+                    "enabled": False,
+                    "api_key": "",
+                    "base_url": "https://api.x.ai/v1",
+                    "default_model": "grok-beta",
+                    "timeout": 60,
+                    "max_retries": 3
+                },
+                "google": {
+                    "enabled": False,
+                    "api_key": "",
+                    "base_url": "https://generativelanguage.googleapis.com/v1beta",
+                    "default_model": "gemini-pro",
+                    "timeout": 60,
+                    "max_retries": 3
+                }
+            },
+            "default_provider": "lm_studio",
+            "processing": {
+                "max_gap_seconds": 3.0,
+                "min_paragraph_length": 10,
+                "wait_for_model": False,
+                "no_headlines": False,
+                "verbose": False
+            },
+            "output": {
+                "default_format": "markdown",
+                "pandoc_path": "pandoc",
+                "auto_detect_format": True,
+                "preferred_formats": ["markdown", "html", "pdf", "docx"]
+            }
+        }
+    
+    def get_provider_config(self, provider: str) -> Optional[Dict]:
+        """Get configuration for a specific AI provider"""
+        return self.config.get("ai_providers", {}).get(provider)
+    
+    def get_enabled_providers(self) -> List[str]:
+        """Get list of enabled AI providers"""
+        providers = []
+        for provider, config in self.config.get("ai_providers", {}).items():
+            if config.get("enabled", False):
+                providers.append(provider)
+        return providers
+    
+    def get_default_provider(self) -> str:
+        """Get the default AI provider"""
+        return self.config.get("default_provider", "lm_studio")
+    
+    def get_processing_config(self) -> Dict:
+        """Get processing configuration"""
+        return self.config.get("processing", {})
+    
+    def get_output_config(self) -> Dict:
+        """Get output configuration"""
+        return self.config.get("output", {})
+    
+    def update_provider_config(self, provider: str, updates: Dict) -> None:
+        """Update configuration for a specific provider"""
+        if "ai_providers" not in self.config:
+            self.config["ai_providers"] = {}
+        if provider not in self.config["ai_providers"]:
+            self.config["ai_providers"][provider] = {}
+        
+        self.config["ai_providers"][provider].update(updates)
+        self._save_config()
+    
+    def _save_config(self) -> None:
+        """Save configuration to file"""
+        try:
+            with open(self.config_path, 'w', encoding='utf-8') as f:
+                json.dump(self.config, f, indent=2)
+        except Exception as e:
+            log(f"Error saving config file: {e}", "ERROR")
 
 def log(message: str, level: str = "INFO"):
     """Log message based on verbosity level"""
@@ -66,6 +233,24 @@ class VideoURLHandler:
             return 'youtube'
         elif 'vimeo.com' in url:
             return 'vimeo'
+        elif 'twitch.tv' in url or 'twitch.com' in url:
+            return 'twitch'
+        elif 'dailymotion.com' in url or 'dai.ly' in url:
+            return 'dailymotion'
+        elif 'tiktok.com' in url:
+            return 'tiktok'
+        elif 'instagram.com' in url or 'instagr.am' in url:
+            return 'instagram'
+        elif 'facebook.com' in url or 'fb.watch' in url:
+            return 'facebook'
+        elif 'twitter.com' in url or 'x.com' in url or 't.co' in url:
+            return 'twitter'
+        elif 'linkedin.com' in url:
+            return 'linkedin'
+        elif 'rumble.com' in url:
+            return 'rumble'
+        elif 'odysee.com' in url:
+            return 'odysee'
         else:
             return 'unknown'
     
@@ -93,6 +278,37 @@ class VideoURLHandler:
             parsed = urlparse(self.video_url)
             return f"https://vimeo.com{parsed.path}"
         
+        elif self.platform == 'twitch':
+            # Clean Twitch URL - remove timestamp parameters
+            parsed = urlparse(self.video_url)
+            if parsed.query:
+                params = parse_qs(parsed.query)
+                # Remove timestamp parameters
+                clean_params = {k: v for k, v in params.items() if k not in ['t', 'time']}
+                if clean_params:
+                    query_string = '&'.join([f"{k}={v[0]}" for k, v in clean_params.items()])
+                    return f"{parsed.scheme}://{parsed.netloc}{parsed.path}?{query_string}"
+            return f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+        
+        elif self.platform == 'dailymotion':
+            # Clean Dailymotion URL
+            parsed = urlparse(self.video_url)
+            return f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+        
+        elif self.platform in ['tiktok', 'instagram', 'facebook', 'twitter', 'linkedin']:
+            # For social media platforms, return the URL as-is (timestamp support varies)
+            return self.video_url
+        
+        elif self.platform == 'rumble':
+            # Clean Rumble URL
+            parsed = urlparse(self.video_url)
+            return f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+        
+        elif self.platform == 'odysee':
+            # Clean Odysee URL
+            parsed = urlparse(self.video_url)
+            return f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+        
         return self.video_url
     
     def get_timestamp_url(self, seconds: float) -> Optional[str]:
@@ -104,58 +320,104 @@ class VideoURLHandler:
             return f"{self.base_url}&t={int(seconds)}s"
         elif self.platform == 'vimeo':
             return f"{self.base_url}#t={seconds:.3f}"
+        elif self.platform == 'twitch':
+            # Twitch uses ?t= parameter for timestamps
+            return f"{self.base_url}?t={int(seconds)}s"
+        elif self.platform == 'dailymotion':
+            # Dailymotion uses ?start= parameter for timestamps
+            return f"{self.base_url}?start={int(seconds)}"
+        elif self.platform == 'tiktok':
+            # TikTok doesn't support direct timestamp URLs, return base URL
+            return self.base_url
+        elif self.platform == 'instagram':
+            # Instagram doesn't support direct timestamp URLs, return base URL
+            return self.base_url
+        elif self.platform == 'facebook':
+            # Facebook uses ?t= parameter for timestamps
+            return f"{self.base_url}?t={int(seconds)}"
+        elif self.platform == 'twitter':
+            # Twitter/X doesn't support direct timestamp URLs, return base URL
+            return self.base_url
+        elif self.platform == 'linkedin':
+            # LinkedIn doesn't support direct timestamp URLs, return base URL
+            return self.base_url
+        elif self.platform == 'rumble':
+            # Rumble uses ?t= parameter for timestamps
+            return f"{self.base_url}?t={int(seconds)}"
+        elif self.platform == 'odysee':
+            # Odysee uses ?t= parameter for timestamps
+            return f"{self.base_url}?t={int(seconds)}"
         else:
             return None
     
     def is_valid(self) -> bool:
         """Check if the video URL is valid and supported"""
-        return self.platform in ['youtube', 'vimeo']
+        return self.platform in [
+            'youtube', 'vimeo', 'twitch', 'dailymotion', 'tiktok', 
+            'instagram', 'facebook', 'twitter', 'linkedin', 'rumble', 'odysee'
+        ]
 
 
-class LMStudioClient:
-    """Client for communicating with LM Studio API"""
+class AIClient:
+    """Unified client for communicating with various AI providers"""
     
-    def __init__(self, base_url: str = "http://localhost:1234", model: str = "qwen/qwen3-4b-2507"):
-        self.base_url = base_url
-        self.model = model
+    def __init__(self, provider: str, config: Dict):
+        self.provider = provider
+        self.config = config
+        self.base_url = config.get("base_url", "")
+        self.model = config.get("default_model", "")
+        self.api_key = config.get("api_key", "")
+        self.timeout = config.get("timeout", 60)
+        self.max_retries = config.get("max_retries", 3)
+        
         self.session = requests.Session()
-        self.session.headers.update({
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-        })
+        self._setup_headers()
     
-    def generate_text(self, prompt: str, max_tokens: int = 1000, temperature: float = 0.7, retries: int = 3) -> str:
-        """Generate text using LM Studio API with retry mechanism"""
+    def _setup_headers(self):
+        """Setup headers based on provider"""
+        if self.provider == "openai":
+            self.session.headers.update({
+                'Content-Type': 'application/json',
+                'Authorization': f'Bearer {self.api_key}'
+            })
+        elif self.provider == "anthropic":
+            self.session.headers.update({
+                'Content-Type': 'application/json',
+                'x-api-key': self.api_key,
+                'anthropic-version': '2023-06-01'
+            })
+        elif self.provider == "grok":
+            self.session.headers.update({
+                'Content-Type': 'application/json',
+                'Authorization': f'Bearer {self.api_key}'
+            })
+        elif self.provider == "google":
+            self.session.headers.update({
+                'Content-Type': 'application/json'
+            })
+        else:  # LM Studio and others
+            self.session.headers.update({
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            })
+    
+    def generate_text(self, prompt: str, max_tokens: int = 1000, temperature: float = 0.7, retries: int = None) -> str:
+        """Generate text using various AI providers with retry mechanism"""
+        if retries is None:
+            retries = self.max_retries
+            
         for attempt in range(retries):
             try:
-                payload = {
-                    "model": self.model,
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": prompt
-                        }
-                    ],
-                    "max_tokens": max_tokens,
-                    "temperature": temperature,
-                    "stream": False
-                }
-                
-                response = self.session.post(
-                    f"{self.base_url}/v1/chat/completions",
-                    json=payload,
-                    timeout=120
-                )
-                
-                if response.status_code == 200:
-                    result = response.json()
-                    content = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
-                    if content:
-                        return content
-                    else:
-                        log(f"Empty response from model (attempt {attempt + 1}/{retries})")
-                else:
-                    log(f"LM Studio API error: {response.status_code} - {response.text}")
+                if self.provider == "openai":
+                    return self._call_openai(prompt, max_tokens, temperature)
+                elif self.provider == "anthropic":
+                    return self._call_anthropic(prompt, max_tokens, temperature)
+                elif self.provider == "grok":
+                    return self._call_grok(prompt, max_tokens, temperature)
+                elif self.provider == "google":
+                    return self._call_google(prompt, max_tokens, temperature)
+                else:  # LM Studio
+                    return self._call_lm_studio(prompt, max_tokens, temperature)
                     
             except requests.exceptions.Timeout:
                 log(f"Request timeout (attempt {attempt + 1}/{retries})")
@@ -171,10 +433,127 @@ class LMStudioClient:
         log("All retry attempts failed")
         return ""
     
+    def _call_openai(self, prompt: str, max_tokens: int, temperature: float) -> str:
+        """Call OpenAI API"""
+        payload = {
+            "model": self.model,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": max_tokens,
+            "temperature": temperature
+        }
+        
+        response = self.session.post(
+            f"{self.base_url}/chat/completions",
+            json=payload,
+            timeout=self.timeout
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            return result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+        else:
+            raise Exception(f"OpenAI API error: {response.status_code} - {response.text}")
+    
+    def _call_anthropic(self, prompt: str, max_tokens: int, temperature: float) -> str:
+        """Call Anthropic Claude API"""
+        payload = {
+            "model": self.model,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "messages": [{"role": "user", "content": prompt}]
+        }
+        
+        response = self.session.post(
+            f"{self.base_url}/messages",
+            json=payload,
+            timeout=self.timeout
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            return result.get('content', [{}])[0].get('text', '').strip()
+        else:
+            raise Exception(f"Anthropic API error: {response.status_code} - {response.text}")
+    
+    def _call_grok(self, prompt: str, max_tokens: int, temperature: float) -> str:
+        """Call Grok API"""
+        payload = {
+            "model": self.model,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": max_tokens,
+            "temperature": temperature
+        }
+        
+        response = self.session.post(
+            f"{self.base_url}/chat/completions",
+            json=payload,
+            timeout=self.timeout
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            return result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+        else:
+            raise Exception(f"Grok API error: {response.status_code} - {response.text}")
+    
+    def _call_google(self, prompt: str, max_tokens: int, temperature: float) -> str:
+        """Call Google Gemini API"""
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "maxOutputTokens": max_tokens,
+                "temperature": temperature
+            }
+        }
+        
+        response = self.session.post(
+            f"{self.base_url}/models/{self.model}:generateContent?key={self.api_key}",
+            json=payload,
+            timeout=self.timeout
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            return result.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', '').strip()
+        else:
+            raise Exception(f"Google API error: {response.status_code} - {response.text}")
+    
+    def _call_lm_studio(self, prompt: str, max_tokens: int, temperature: float) -> str:
+        """Call LM Studio API (existing implementation)"""
+        payload = {
+            "model": self.model,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "stream": False
+        }
+        
+        response = self.session.post(
+            f"{self.base_url}/v1/chat/completions",
+            json=payload,
+            timeout=self.timeout
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            return result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+        else:
+            raise Exception(f"LM Studio API error: {response.status_code} - {response.text}")
+    
     def is_available(self) -> bool:
-        """Check if LM Studio is available"""
+        """Check if AI provider is available"""
         try:
-            response = self.session.get(f"{self.base_url}/v1/models", timeout=5)
+            if self.provider == "openai":
+                response = self.session.get(f"{self.base_url}/models", timeout=5)
+            elif self.provider == "anthropic":
+                response = self.session.get(f"{self.base_url}/messages", timeout=5)
+            elif self.provider == "grok":
+                response = self.session.get(f"{self.base_url}/models", timeout=5)
+            elif self.provider == "google":
+                response = self.session.get(f"{self.base_url}/models?key={self.api_key}", timeout=5)
+            else:  # LM Studio
+                response = self.session.get(f"{self.base_url}/v1/models", timeout=5)
+            
             return response.status_code == 200
         except:
             return False
@@ -262,7 +641,7 @@ class LMStudioClient:
         return len(text) // 4
 
 
-def select_lm_studio_model(lm_client: LMStudioClient, preferred_model: str = "qwen/qwen3-4b-2507") -> str:
+def select_lm_studio_model(lm_client: AIClient, preferred_model: str = "qwen/qwen3-4b-2507") -> str:
     """Select an available model from LM Studio, with fallback options"""
     if not lm_client.is_available():
         return None
@@ -345,7 +724,7 @@ class SubtitleParser:
         self.vtt_time_pattern = re.compile(r'(\d{2}):(\d{2}):(\d{2})\.(\d{3})')
     
     def parse_time_to_seconds(self, time_str: str) -> float:
-        """Convert SRT or VTT time format to seconds"""
+        """Convert various time formats to seconds"""
         # Try SRT format first (comma separator)
         match = self.srt_time_pattern.match(time_str)
         if match:
@@ -358,23 +737,78 @@ class SubtitleParser:
             hours, minutes, seconds, milliseconds = map(int, match.groups())
             return hours * 3600 + minutes * 60 + seconds + milliseconds / 1000.0
         
+        # Try ASS/SSA format (H:MM:SS.CC - centiseconds)
+        ass_pattern = re.compile(r'(\d+):(\d{2}):(\d{2})\.(\d{2})')
+        match = ass_pattern.match(time_str)
+        if match:
+            hours, minutes, seconds, centiseconds = map(int, match.groups())
+            return hours * 3600 + minutes * 60 + seconds + centiseconds / 100.0
+        
+        # Try SBV format (H:MM:SS.mmm)
+        sbv_pattern = re.compile(r'(\d+):(\d{2}):(\d{2})\.(\d{3})')
+        match = sbv_pattern.match(time_str)
+        if match:
+            hours, minutes, seconds, milliseconds = map(int, match.groups())
+            return hours * 3600 + minutes * 60 + seconds + milliseconds / 1000.0
+        
+        # Try LRC format ([MM:SS.mm] or [H:MM:SS.mm])
+        lrc_pattern = re.compile(r'\[(\d+):(\d{2})(?:\.(\d{2}))?\]')
+        match = lrc_pattern.match(time_str)
+        if match:
+            minutes, seconds, centiseconds = match.groups()
+            minutes = int(minutes)
+            seconds = int(seconds)
+            centiseconds = int(centiseconds) if centiseconds else 0
+            return minutes * 60 + seconds + centiseconds / 100.0
+        
         return 0.0
     
     def detect_format(self, file_path: str) -> str:
-        """Detect subtitle format (SRT or VTT) based on file extension and content"""
+        """Detect subtitle format based on file extension and content"""
         # Check file extension first
-        if file_path.lower().endswith('.vtt'):
+        file_ext = file_path.lower().split('.')[-1] if '.' in file_path else ''
+        
+        # Extension-based detection
+        if file_ext == 'vtt':
             return 'vtt'
-        elif file_path.lower().endswith('.srt'):
+        elif file_ext == 'srt':
             return 'srt'
+        elif file_ext == 'ass':
+            return 'ass'
+        elif file_ext == 'ssa':
+            return 'ssa'
+        elif file_ext == 'sbv':
+            return 'sbv'
+        elif file_ext == 'ttml' or file_ext == 'dfxp':
+            return 'ttml'
+        elif file_ext == 'smi':
+            return 'sami'
+        elif file_ext == 'lrc':
+            return 'lrc'
         
         # If no extension or unknown, check content
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
-                first_line = f.readline().strip()
-                if first_line == 'WEBVTT':
+                content = f.read(1000)  # Read first 1000 chars for analysis
+                content_lower = content.lower()
+                
+                # Check for format signatures
+                if 'webvtt' in content_lower:
                     return 'vtt'
-                elif first_line.isdigit():
+                elif '[script info]' in content_lower or '[v4+ styles]' in content_lower:
+                    return 'ass'
+                elif '[script info]' in content_lower and 'ssa' in content_lower:
+                    return 'ssa'
+                elif '<tt' in content_lower and 'xml' in content_lower:
+                    return 'ttml'
+                elif '<sami>' in content_lower or '<sync' in content_lower:
+                    return 'sami'
+                elif '[' in content and ']' in content and ':' in content:
+                    # Check if it looks like LRC format
+                    lines = content.split('\n')[:3]
+                    if all('[' in line and ']' in line for line in lines if line.strip()):
+                        return 'lrc'
+                elif content.split('\n')[0].strip().isdigit():
                     return 'srt'
         except:
             pass
@@ -410,6 +844,18 @@ class SubtitleParser:
             # Parse based on format
             if file_format == 'vtt':
                 subtitle_blocks = self._parse_vtt_content(content)
+            elif file_format == 'ass':
+                subtitle_blocks = self._parse_ass_content(content)
+            elif file_format == 'ssa':
+                subtitle_blocks = self._parse_ssa_content(content)
+            elif file_format == 'sbv':
+                subtitle_blocks = self._parse_sbv_content(content)
+            elif file_format == 'ttml':
+                subtitle_blocks = self._parse_ttml_content(content)
+            elif file_format == 'sami':
+                subtitle_blocks = self._parse_sami_content(content)
+            elif file_format == 'lrc':
+                subtitle_blocks = self._parse_lrc_content(content)
             else:
                 subtitle_blocks = self._parse_srt_content(content)
             
@@ -508,12 +954,194 @@ class SubtitleParser:
             blocks.append('\n'.join(current_block))
         
         return blocks
+    
+    def _parse_ass_content(self, content: str) -> List[str]:
+        """Parse ASS content into subtitle blocks"""
+        blocks = []
+        lines = content.split('\n')
+        current_block = []
+        in_dialogue = False
+        
+        for line in lines:
+            line = line.strip()
+            if line.startswith('[Events]'):
+                in_dialogue = True
+                continue
+            elif line.startswith('[') and line.endswith(']'):
+                in_dialogue = False
+                continue
+            
+            if in_dialogue and line.startswith('Dialogue:'):
+                # ASS format: Dialogue: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
+                parts = line.split(',', 9)
+                if len(parts) >= 10:
+                    start_time = parts[1]
+                    end_time = parts[2]
+                    text = parts[9]
+                    # Clean up ASS formatting codes
+                    text = re.sub(r'\{[^}]*\}', '', text)  # Remove style codes
+                    text = text.replace('\\N', '\n')  # Convert line breaks
+                    text = text.replace('\\n', '\n')
+                    blocks.append(f"{start_time} --> {end_time}\n{text}")
+        
+        return blocks
+    
+    def _parse_ssa_content(self, content: str) -> List[str]:
+        """Parse SSA content into subtitle blocks (similar to ASS)"""
+        return self._parse_ass_content(content)
+    
+    def _parse_sbv_content(self, content: str) -> List[str]:
+        """Parse SBV content into subtitle blocks"""
+        blocks = []
+        lines = content.split('\n')
+        current_block = []
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                if current_block:
+                    blocks.append('\n'.join(current_block))
+                    current_block = []
+            elif ',' in line and ':' in line:
+                # SBV format: start_time,end_time
+                current_block = [line]
+            else:
+                if current_block:
+                    current_block.append(line)
+        
+        if current_block:
+            blocks.append('\n'.join(current_block))
+        
+        return blocks
+    
+    def _parse_ttml_content(self, content: str) -> List[str]:
+        """Parse TTML content into subtitle blocks"""
+        blocks = []
+        try:
+            import xml.etree.ElementTree as ET
+            root = ET.fromstring(content)
+            
+            # Find all p elements (paragraphs)
+            for p in root.findall('.//{http://www.w3.org/ns/ttml}p'):
+                begin = p.get('begin')
+                end = p.get('end')
+                text = p.text or ''
+                
+                # Clean up text
+                text = re.sub(r'<[^>]+>', '', text)  # Remove XML tags
+                text = text.strip()
+                
+                if begin and end and text:
+                    # Convert TTML time format to SRT-like format
+                    start_time = self._convert_ttml_time(begin)
+                    end_time = self._convert_ttml_time(end)
+                    blocks.append(f"{start_time} --> {end_time}\n{text}")
+        except Exception as e:
+            log(f"Error parsing TTML: {e}")
+        
+        return blocks
+    
+    def _convert_ttml_time(self, ttml_time: str) -> str:
+        """Convert TTML time format to SRT format"""
+        # TTML can have formats like: 1.5s, 00:00:01.500, 1.5
+        if ttml_time.endswith('s'):
+            seconds = float(ttml_time[:-1])
+        elif ':' in ttml_time:
+            # Already in HH:MM:SS.mmm format
+            return ttml_time.replace('.', ',')
+        else:
+            seconds = float(ttml_time)
+        
+        # Convert to HH:MM:SS,mmm format
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        secs = int(seconds % 60)
+        millis = int((seconds % 1) * 1000)
+        
+        return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
+    
+    def _parse_sami_content(self, content: str) -> List[str]:
+        """Parse SAMI content into subtitle blocks"""
+        blocks = []
+        try:
+            import xml.etree.ElementTree as ET
+            root = ET.fromstring(content)
+            
+            for sync in root.findall('.//sync'):
+                start = sync.get('start')
+                text_elem = sync.find('p')
+                if text_elem is not None:
+                    text = text_elem.text or ''
+                    text = re.sub(r'<[^>]+>', '', text)  # Remove HTML tags
+                    text = text.strip()
+                    
+                    if start and text:
+                        # Convert milliseconds to time format
+                        start_ms = int(start)
+                        end_ms = start_ms + 3000  # Default 3 seconds duration
+                        
+                        start_time = self._convert_ms_to_time(start_ms)
+                        end_time = self._convert_ms_to_time(end_ms)
+                        
+                        blocks.append(f"{start_time} --> {end_time}\n{text}")
+        except Exception as e:
+            log(f"Error parsing SAMI: {e}")
+        
+        return blocks
+    
+    def _convert_ms_to_time(self, milliseconds: int) -> str:
+        """Convert milliseconds to HH:MM:SS,mmm format"""
+        seconds = milliseconds // 1000
+        millis = milliseconds % 1000
+        
+        hours = seconds // 3600
+        minutes = (seconds % 3600) // 60
+        secs = seconds % 60
+        
+        return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
+    
+    def _parse_lrc_content(self, content: str) -> List[str]:
+        """Parse LRC content into subtitle blocks"""
+        blocks = []
+        lines = content.split('\n')
+        
+        for i, line in enumerate(lines):
+            line = line.strip()
+            if not line or not line.startswith('['):
+                continue
+            
+            # Extract timestamp and text
+            match = re.match(r'\[(\d+:\d{2}(?:\.\d{2})?)\](.*)', line)
+            if match:
+                time_str = match.group(1)
+                text = match.group(2).strip()
+                
+                if text:
+                    # Convert LRC time to seconds, then to SRT format
+                    seconds = self.parse_time_to_seconds(f"[{time_str}]")
+                    end_seconds = seconds + 3.0  # Default 3 seconds duration
+                    
+                    start_time = self._convert_seconds_to_srt_time(seconds)
+                    end_time = self._convert_seconds_to_srt_time(end_seconds)
+                    
+                    blocks.append(f"{start_time} --> {end_time}\n{text}")
+        
+        return blocks
+    
+    def _convert_seconds_to_srt_time(self, seconds: float) -> str:
+        """Convert seconds to SRT time format"""
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        secs = int(seconds % 60)
+        millis = int((seconds % 1) * 1000)
+        
+        return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
 
 
 class ParagraphGrouper:
     """Groups subtitle blocks into logical paragraphs using AI assistance"""
     
-    def __init__(self, max_gap_seconds: float = 3.0, min_paragraph_length: int = 10, lm_client: Optional[LMStudioClient] = None):
+    def __init__(self, max_gap_seconds: float = 3.0, min_paragraph_length: int = 10, lm_client: Optional[AIClient] = None):
         self.max_gap_seconds = max_gap_seconds
         self.min_paragraph_length = min_paragraph_length
         self.lm_client = lm_client
@@ -990,7 +1618,7 @@ Return ONLY the line numbers where paragraphs should end (after complete sentenc
 class HeadlineGenerator:
     """Generates headlines and subheadlines using AI analysis"""
     
-    def __init__(self, lm_client: Optional[LMStudioClient] = None):
+    def __init__(self, lm_client: Optional[AIClient] = None):
         self.lm_client = lm_client
         self.headline_keywords = [
             'introduction', 'overview', 'summary', 'conclusion',
@@ -1174,11 +1802,10 @@ class HeadlineGenerator:
         return start_time
 
 
-class PandocConverter:
-    """Handles conversion to various output formats using pandoc"""
+class PythonConverter:
+    """Handles conversion to various output formats using Python libraries"""
     
-    def __init__(self, pandoc_path: str = "pandoc"):
-        self.pandoc_path = pandoc_path
+    def __init__(self):
         self.supported_formats = {
             'html': 'html',
             'pdf': 'pdf',
@@ -1186,78 +1813,319 @@ class PandocConverter:
             'odt': 'odt',
             'rtf': 'rtf'
         }
+        self._check_dependencies()
+    
+    def _check_dependencies(self):
+        """Check which conversion libraries are available"""
+        self.available_libs = {
+            'weasyprint': False,
+            'reportlab': False,
+            'markdown': False,
+            'docx': False,
+            'odfpy': False
+        }
+        
+        # Check for WeasyPrint (PDF from HTML)
+        try:
+            import weasyprint
+            self.available_libs['weasyprint'] = True
+        except ImportError:
+            pass
+        
+        # Check for ReportLab (direct PDF)
+        try:
+            import reportlab
+            self.available_libs['reportlab'] = True
+        except ImportError:
+            pass
+        
+        # Check for Markdown
+        try:
+            import markdown
+            self.available_libs['markdown'] = True
+        except ImportError:
+            pass
+        
+        # Check for python-docx
+        try:
+            from docx import Document
+            self.available_libs['docx'] = True
+        except ImportError:
+            pass
+        
+        # Check for odfpy
+        try:
+            import odf
+            self.available_libs['odfpy'] = True
+        except ImportError:
+            pass
     
     def is_available(self) -> bool:
-        """Check if pandoc is available"""
-        try:
-            result = subprocess.run([self.pandoc_path, '--version'], 
-                                  capture_output=True, text=True, timeout=10)
-            return result.returncode == 0
-        except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError):
-            return False
+        """Check if any conversion libraries are available"""
+        return any(self.available_libs.values())
+    
+    def get_available_formats(self) -> List[str]:
+        """Get list of available output formats"""
+        available = ['markdown']  # Always available
+        
+        if self.available_libs['markdown']:
+            available.append('html')
+        
+        if self.available_libs['weasyprint'] or self.available_libs['reportlab']:
+            available.append('pdf')
+        
+        if self.available_libs['docx']:
+            available.append('docx')
+        
+        if self.available_libs['odfpy']:
+            available.append('odt')
+        
+        return available
     
     def convert(self, markdown_content: str, output_format: str, output_file: str) -> bool:
-        """Convert markdown content to specified format"""
+        """Convert markdown content to specified format using Python libraries"""
         if output_format not in self.supported_formats:
             log(f"Unsupported format: {output_format}", "ERROR")
             return False
         
         if not self.is_available():
-            log("Pandoc is not available. Please install pandoc to use format conversion.", "ERROR")
+            log("No conversion libraries available. Please install required packages.", "ERROR")
             return False
         
         try:
-            # Create temporary markdown file
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False, encoding='utf-8') as temp_md:
-                temp_md.write(markdown_content)
-                temp_md_path = temp_md.name
-            
-            # Build pandoc command
-            cmd = [
-                self.pandoc_path,
-                temp_md_path,
-                '-o', output_file,
-                '-f', 'markdown',
-                '-t', self.supported_formats[output_format]
-            ]
-            
-            # Add format-specific options
-            if output_format == 'pdf':
-                cmd.extend(['--pdf-engine=xelatex', '--variable=geometry:margin=1in'])
-            elif output_format == 'html':
-                cmd.extend(['--standalone', '--css=style.css'])
-            elif output_format in ['docx', 'odt']:
-                cmd.extend(['--reference-doc=template.docx'] if output_format == 'docx' else [])
-            
-            # Run pandoc
-            log(f"Converting to {output_format.upper()} using pandoc...")
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-            
-            # Clean up temporary file
-            try:
-                os.unlink(temp_md_path)
-            except:
-                pass
-            
-            if result.returncode == 0:
-                log(f"Successfully converted to {output_format.upper()}")
-                return True
+            if output_format == 'html':
+                return self._convert_to_html(markdown_content, output_file)
+            elif output_format == 'pdf':
+                return self._convert_to_pdf(markdown_content, output_file)
+            elif output_format == 'docx':
+                return self._convert_to_docx(markdown_content, output_file)
+            elif output_format == 'odt':
+                return self._convert_to_odt(markdown_content, output_file)
+            elif output_format == 'rtf':
+                return self._convert_to_rtf(markdown_content, output_file)
             else:
-                log(f"Pandoc conversion failed: {result.stderr}", "ERROR")
+                log(f"Conversion to {output_format} not implemented", "ERROR")
                 return False
                 
-        except subprocess.TimeoutExpired:
-            log("Pandoc conversion timed out", "ERROR")
+        except Exception as e:
+            log(f"Error during conversion: {e}", "ERROR")
+            return False
+    
+    def _convert_to_html(self, markdown_content: str, output_file: str) -> bool:
+        """Convert markdown to HTML"""
+        if not self.available_libs['markdown']:
+            log("Markdown library not available. Install with: pip install markdown", "ERROR")
+            return False
+        
+        try:
+            import markdown
+            html_content = markdown.markdown(markdown_content, extensions=['tables', 'toc'])
+            
+            # Wrap in HTML document
+            full_html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Transcript</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }}
+        h1, h2 {{ color: #333; }}
+        h2 {{ border-bottom: 1px solid #eee; padding-bottom: 5px; }}
+        a {{ color: #0066cc; text-decoration: none; }}
+        a:hover {{ text-decoration: underline; }}
+    </style>
+</head>
+<body>
+{html_content}
+</body>
+</html>"""
+            
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write(full_html)
+            
+            log(f"Successfully converted to HTML")
+            return True
+        except Exception as e:
+            log(f"HTML conversion failed: {e}", "ERROR")
+            return False
+    
+    def _convert_to_pdf(self, markdown_content: str, output_file: str) -> bool:
+        """Convert markdown to PDF"""
+        # Try WeasyPrint first (better HTML to PDF conversion)
+        if self.available_libs['weasyprint']:
+            return self._convert_to_pdf_weasyprint(markdown_content, output_file)
+        elif self.available_libs['reportlab']:
+            return self._convert_to_pdf_reportlab(markdown_content, output_file)
+        else:
+            log("No PDF conversion libraries available. Install with: pip install weasyprint", "ERROR")
+            return False
+    
+    def _convert_to_pdf_weasyprint(self, markdown_content: str, output_file: str) -> bool:
+        """Convert to PDF using WeasyPrint"""
+        try:
+            import weasyprint
+            import markdown
+            
+            # Convert markdown to HTML first
+            html_content = markdown.markdown(markdown_content, extensions=['tables', 'toc'])
+            
+            # Create HTML document
+            html_doc = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Transcript</title>
+    <style>
+        @page {{ margin: 1in; }}
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; }}
+        h1, h2 {{ color: #333; page-break-after: avoid; }}
+        h2 {{ border-bottom: 1px solid #eee; padding-bottom: 5px; }}
+        a {{ color: #0066cc; text-decoration: none; }}
+    </style>
+</head>
+<body>
+{html_content}
+</body>
+</html>"""
+            
+            # Convert HTML to PDF
+            weasyprint.HTML(string=html_doc).write_pdf(output_file)
+            log(f"Successfully converted to PDF using WeasyPrint")
+            return True
+        except Exception as e:
+            log(f"WeasyPrint PDF conversion failed: {e}", "ERROR")
+            return False
+    
+    def _convert_to_pdf_reportlab(self, markdown_content: str, output_file: str) -> bool:
+        """Convert to PDF using ReportLab"""
+        try:
+            from reportlab.lib.pagesizes import letter
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.lib.units import inch
+            
+            # Create PDF document
+            doc = SimpleDocTemplate(output_file, pagesize=letter)
+            styles = getSampleStyleSheet()
+            story = []
+            
+            # Custom style for paragraphs
+            custom_style = ParagraphStyle(
+                'Custom',
+                parent=styles['Normal'],
+                fontSize=12,
+                spaceAfter=12,
+            )
+            
+            # Parse markdown content (simple implementation)
+            lines = markdown_content.split('\n')
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    story.append(Spacer(1, 6))
+                elif line.startswith('# '):
+                    story.append(Paragraph(line[2:], styles['Title']))
+                elif line.startswith('## '):
+                    story.append(Paragraph(line[3:], styles['Heading1']))
+                elif line.startswith('**') and line.endswith('**'):
+                    story.append(Paragraph(line, styles['Heading2']))
+                else:
+                    story.append(Paragraph(line, custom_style))
+            
+            doc.build(story)
+            log(f"Successfully converted to PDF using ReportLab")
+            return True
+        except Exception as e:
+            log(f"ReportLab PDF conversion failed: {e}", "ERROR")
+            return False
+    
+    def _convert_to_docx(self, markdown_content: str, output_file: str) -> bool:
+        """Convert markdown to DOCX"""
+        if not self.available_libs['docx']:
+            log("python-docx library not available. Install with: pip install python-docx", "ERROR")
+            return False
+        
+        try:
+            from docx import Document
+            from docx.shared import Inches
+            
+            doc = Document()
+            
+            # Parse markdown content
+            lines = markdown_content.split('\n')
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                elif line.startswith('# '):
+                    doc.add_heading(line[2:], level=1)
+                elif line.startswith('## '):
+                    doc.add_heading(line[3:], level=2)
+                elif line.startswith('**') and line.endswith('**'):
+                    p = doc.add_paragraph()
+                    p.add_run(line).bold = True
+                else:
+                    doc.add_paragraph(line)
+            
+            doc.save(output_file)
+            log(f"Successfully converted to DOCX")
+            return True
+        except Exception as e:
+            log(f"DOCX conversion failed: {e}", "ERROR")
+            return False
+    
+    def _convert_to_odt(self, markdown_content: str, output_file: str) -> bool:
+        """Convert markdown to ODT"""
+        if not self.available_libs['odfpy']:
+            log("odfpy library not available. Install with: pip install odfpy", "ERROR")
+            return False
+        
+        try:
+            # ODT conversion is complex, for now just create a simple text document
+            # This is a placeholder implementation
+            log("ODT conversion not fully implemented. Install odfpy for basic support.", "ERROR")
             return False
         except Exception as e:
-            log(f"Error during pandoc conversion: {e}", "ERROR")
+            log(f"ODT conversion failed: {e}", "ERROR")
+            return False
+    
+    def _convert_to_rtf(self, markdown_content: str, output_file: str) -> bool:
+        """Convert markdown to RTF"""
+        try:
+            # Simple RTF conversion
+            rtf_content = "{\\rtf1\\ansi\\deff0 {\\fonttbl {\\f0 Times New Roman;}}\\f0\\fs24 "
+            
+            # Basic markdown to RTF conversion
+            lines = markdown_content.split('\n')
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    rtf_content += "\\par "
+                elif line.startswith('# '):
+                    rtf_content += f"\\b {line[2:]}\\b0\\par "
+                elif line.startswith('## '):
+                    rtf_content += f"\\b {line[3:]}\\b0\\par "
+                elif line.startswith('**') and line.endswith('**'):
+                    rtf_content += f"\\b {line[2:-2]}\\b0\\par "
+                else:
+                    rtf_content += f"{line}\\par "
+            
+            rtf_content += "}"
+            
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write(rtf_content)
+            
+            log(f"Successfully converted to RTF")
+            return True
+        except Exception as e:
+            log(f"RTF conversion failed: {e}", "ERROR")
             return False
 
 
 class MarkdownFormatter:
     """Formats paragraphs and headlines into Markdown"""
     
-    def __init__(self, lm_client: Optional[LMStudioClient] = None, video_handler: Optional[VideoURLHandler] = None, no_headlines: bool = False):
+    def __init__(self, lm_client: Optional[AIClient] = None, video_handler: Optional[VideoURLHandler] = None, no_headlines: bool = False):
         self.headline_generator = HeadlineGenerator(lm_client)
         self.video_handler = video_handler
         self.no_headlines = no_headlines
@@ -1331,33 +2199,78 @@ class MarkdownFormatter:
 class SRTToMarkdownConverter:
     """Main converter class that orchestrates the conversion process"""
     
-    def __init__(self, max_gap_seconds: float = 3.0, min_paragraph_length: int = 10, lm_studio_url: str = "http://localhost:1234", model: str = "qwen/qwen3-4b-2507", video_url: str = None, wait_for_model: bool = False, no_headlines: bool = False, output_format: str = "markdown", pandoc_path: str = "pandoc"):
+    def __init__(self, max_gap_seconds: float = 3.0, min_paragraph_length: int = 10, lm_studio_url: str = "http://localhost:1234", model: str = "qwen/qwen3-4b-2507", video_url: str = None, wait_for_model: bool = False, no_headlines: bool = False, output_format: str = "markdown", config_path: str = None, ai_provider: str = None):
         self.parser = SubtitleParser()
-        self.lm_client = LMStudioClient(lm_studio_url, model)
+        self.config_manager = ConfigManager(config_path)
         self.video_handler = VideoURLHandler(video_url) if video_url else None
         
-        # Select the best available model
-        if self.lm_client.is_available():
-            if wait_for_model:
-                print("Waiting for model to be ready...")
-                if not self.lm_client.wait_for_model_ready():
-                    print("⚠ Model not ready, using fallback processing")
-                    self.lm_client = None
-            else:
-                selected_model = select_lm_studio_model(self.lm_client, model)
-                if selected_model:
-                    self.lm_client.model = selected_model
-                else:
-                    print("⚠ No suitable model found, disabling AI processing")
-                    self.lm_client = None
-        else:
-            print("⚠ LM Studio not available, using fallback processing")
-            self.lm_client = None
+        # Initialize AI client
+        self.ai_client = self._initialize_ai_client(ai_provider, lm_studio_url, model, wait_for_model)
         
-        self.grouper = ParagraphGrouper(max_gap_seconds, min_paragraph_length, self.lm_client)
-        self.formatter = MarkdownFormatter(self.lm_client, self.video_handler, no_headlines)
-        self.pandoc_converter = PandocConverter(pandoc_path)
-        self.output_format = output_format
+        self.grouper = ParagraphGrouper(max_gap_seconds, min_paragraph_length, self.ai_client)
+        self.formatter = MarkdownFormatter(self.ai_client, self.video_handler, no_headlines)
+        self.python_converter = PythonConverter()
+        
+        # Use default format from config if not specified
+        if output_format == "markdown" and self.config_manager:
+            config_output = self.config_manager.get_output_config()
+            self.output_format = config_output.get("default_format", output_format)
+        else:
+            self.output_format = output_format
+    
+    def _initialize_ai_client(self, ai_provider: str = None, lm_studio_url: str = None, model: str = None, wait_for_model: bool = False) -> Optional[AIClient]:
+        """Initialize AI client based on configuration and command line options"""
+        # Determine which provider to use
+        if ai_provider:
+            provider = ai_provider
+        else:
+            provider = self.config_manager.get_default_provider()
+        
+        # Get provider configuration
+        provider_config = self.config_manager.get_provider_config(provider)
+        if not provider_config:
+            print(f"⚠ Provider '{provider}' not found in configuration")
+            return None
+        
+        if not provider_config.get("enabled", False):
+            print(f"⚠ Provider '{provider}' is disabled in configuration")
+            return None
+        
+        # Override config with command line options if provided
+        if lm_studio_url and provider == "lm_studio":
+            provider_config = provider_config.copy()
+            provider_config["base_url"] = lm_studio_url
+        if model:
+            provider_config = provider_config.copy()
+            provider_config["default_model"] = model
+        
+        # Check for required API keys
+        if provider in ["openai", "anthropic", "grok", "google"]:
+            api_key = provider_config.get("api_key", "")
+            if not api_key:
+                print(f"⚠ API key not configured for {provider}")
+                print(f"  Please set the API key in your config file: {self.config_manager.config_path}")
+                return None
+        
+        # Create AI client
+        try:
+            ai_client = AIClient(provider, provider_config)
+            
+            # Test availability
+            if ai_client.is_available():
+                print(f"✓ {provider.title()} is available - using {ai_client.model}")
+                if wait_for_model and provider == "lm_studio":
+                    if not ai_client.wait_for_model_ready():
+                        print("⚠ Model not ready, using fallback processing")
+                        return None
+                return ai_client
+            else:
+                print(f"⚠ {provider.title()} is not available")
+                return None
+                
+        except Exception as e:
+            print(f"⚠ Error initializing {provider}: {e}")
+            return None
     
     def _detect_format_from_extension(self, filename: str) -> str:
         """Detect output format from file extension"""
@@ -1444,7 +2357,7 @@ class SRTToMarkdownConverter:
                 print(f"✓ Video URL configured - timestamps will link to {self.video_handler.platform} video")
             else:
                 print("⚠ Invalid video URL - timestamps will not be clickable")
-                print(f"  Supported platforms: YouTube, Vimeo")
+                print(f"  Supported platforms: YouTube, Vimeo, Twitch, Dailymotion, TikTok, Instagram, Facebook, Twitter, LinkedIn, Rumble, Odysee")
                 print(f"  Provided URL: {self.video_handler.video_url}")
         
         print("Grouping into paragraphs...")
@@ -1477,15 +2390,15 @@ class SRTToMarkdownConverter:
                     f.write(markdown_content)
                 print(f"Markdown saved to: {output_file}")
             else:
-                # Convert using pandoc
-                if self.pandoc_converter.is_available():
-                    if self.pandoc_converter.convert(markdown_content, self.output_format, output_file):
+                # Convert using Python libraries
+                if self.python_converter.is_available():
+                    if self.python_converter.convert(markdown_content, self.output_format, output_file):
                         print(f"{self.output_format.upper()} saved to: {output_file}")
                     else:
                         print(f"Failed to convert to {self.output_format.upper()}")
                         return ""
                 else:
-                    print(f"Pandoc not available. Saving as markdown instead.")
+                    print(f"Python conversion libraries not available. Saving as markdown instead.")
                     # Fallback to markdown
                     markdown_file = output_file.rsplit('.', 1)[0] + '.md'
                     with open(markdown_file, 'w', encoding='utf-8') as f:
@@ -1499,15 +2412,182 @@ class SRTToMarkdownConverter:
         return markdown_content
 
 
+def setup_configuration(config_path: str = None) -> None:
+    """Interactive configuration setup"""
+    config_manager = ConfigManager(config_path)
+    
+    print("🔧 Sub2Trans Configuration Setup")
+    print("=" * 40)
+    print(f"Config file: {config_manager.config_path}")
+    print()
+    
+    # Get default provider
+    current_default = config_manager.get_default_provider()
+    print(f"Current default provider: {current_default}")
+    
+    providers = ["lm_studio", "openai", "anthropic", "grok", "google"]
+    print("\nAvailable providers:")
+    for i, provider in enumerate(providers, 1):
+        config = config_manager.get_provider_config(provider)
+        status = "✓ Enabled" if config.get("enabled", False) else "✗ Disabled"
+        print(f"  {i}. {provider.title()} - {status}")
+    
+    try:
+        choice = input(f"\nSelect default provider (1-{len(providers)}, or press Enter to keep '{current_default}'): ").strip()
+        if choice:
+            provider_idx = int(choice) - 1
+            if 0 <= provider_idx < len(providers):
+                config_manager.config["default_provider"] = providers[provider_idx]
+                print(f"✓ Set default provider to {providers[provider_idx]}")
+        
+        # Configure API keys for cloud providers
+        for provider in ["openai", "anthropic", "grok", "google"]:
+            config = config_manager.get_provider_config(provider)
+            if not config.get("api_key"):
+                print(f"\n{provider.title()} API Key:")
+                print("  Leave empty to skip, or enter your API key")
+                api_key = input(f"  API Key: ").strip()
+                if api_key:
+                    config_manager.update_provider_config(provider, {"api_key": api_key, "enabled": True})
+                    print(f"✓ {provider.title()} configured")
+                else:
+                    print(f"  Skipped {provider.title()}")
+        
+        # Configure default output format
+        print(f"\nOutput Format Configuration:")
+        current_format = config_manager.get_output_config().get("default_format", "markdown")
+        print(f"Current default format: {current_format}")
+        
+        formats = ["markdown", "html", "pdf", "docx", "odt", "rtf"]
+        print("\nAvailable formats:")
+        for i, fmt in enumerate(formats, 1):
+            print(f"  {i}. {fmt.upper()}")
+        
+        try:
+            format_choice = input(f"\nSelect default format (1-{len(formats)}, or press Enter to keep '{current_format}'): ").strip()
+            if format_choice:
+                format_idx = int(format_choice) - 1
+                if 0 <= format_idx < len(formats):
+                    config_manager.config["output"]["default_format"] = formats[format_idx]
+                    print(f"✓ Set default format to {formats[format_idx]}")
+        except (ValueError, IndexError):
+            print("  Invalid choice, keeping current format")
+        
+        # Save configuration
+        config_manager._save_config()
+        print(f"\n✓ Configuration saved to {config_manager.config_path}")
+        
+    except KeyboardInterrupt:
+        print("\n\nSetup cancelled")
+    except Exception as e:
+        print(f"\nError during setup: {e}")
+
+
+def show_configuration(config_path: str = None) -> None:
+    """Display current configuration"""
+    config_manager = ConfigManager(config_path)
+    
+    print("📋 Sub2Trans Current Configuration")
+    print("=" * 40)
+    print(f"Config file: {config_manager.config_path}")
+    print()
+    
+    # Show default provider
+    default_provider = config_manager.get_default_provider()
+    print(f"Default AI Provider: {default_provider.title()}")
+    
+    # Show provider status
+    print("\nAI Provider Status:")
+    for provider, config in config_manager.config.get("ai_providers", {}).items():
+        status = "✓ Enabled" if config.get("enabled", False) else "✗ Disabled"
+        has_key = "✓ API Key Set" if config.get("api_key") else "✗ No API Key"
+        print(f"  {provider.title()}: {status} ({has_key})")
+    
+    # Show output configuration
+    output_config = config_manager.get_output_config()
+    print(f"\nOutput Configuration:")
+    print(f"  Default Format: {output_config.get('default_format', 'markdown')}")
+    print(f"  Pandoc Path: {output_config.get('pandoc_path', 'pandoc')}")
+    print(f"  Auto-detect Format: {output_config.get('auto_detect_format', True)}")
+    
+    # Show processing configuration
+    processing_config = config_manager.get_processing_config()
+    print(f"\nProcessing Configuration:")
+    print(f"  Max Gap Seconds: {processing_config.get('max_gap_seconds', 3.0)}")
+    print(f"  Min Paragraph Length: {processing_config.get('min_paragraph_length', 10)}")
+    print(f"  Wait for Model: {processing_config.get('wait_for_model', False)}")
+    print(f"  No Headlines: {processing_config.get('no_headlines', False)}")
+    print(f"  Verbose: {processing_config.get('verbose', False)}")
+
+
+def list_available_formats() -> None:
+    """Display available output formats and required libraries"""
+    converter = PythonConverter()
+    
+    print("📄 Available Output Formats")
+    print("=" * 40)
+    
+    # Always available formats
+    print("✅ Always Available:")
+    print("  • markdown - Native format, no dependencies")
+    
+    # Check each format
+    if converter.available_libs['markdown']:
+        print("\n✅ HTML Conversion:")
+        print("  • html - Requires: pip install markdown")
+    else:
+        print("\n❌ HTML Conversion:")
+        print("  • html - Install with: pip install markdown")
+    
+    if converter.available_libs['weasyprint']:
+        print("\n✅ PDF Conversion (WeasyPrint):")
+        print("  • pdf - Requires: pip install weasyprint")
+    elif converter.available_libs['reportlab']:
+        print("\n✅ PDF Conversion (ReportLab):")
+        print("  • pdf - Requires: pip install reportlab")
+    else:
+        print("\n❌ PDF Conversion:")
+        print("  • pdf - Install with: pip install weasyprint (recommended) or pip install reportlab")
+    
+    if converter.available_libs['docx']:
+        print("\n✅ DOCX Conversion:")
+        print("  • docx - Requires: pip install python-docx")
+    else:
+        print("\n❌ DOCX Conversion:")
+        print("  • docx - Install with: pip install python-docx")
+    
+    if converter.available_libs['odfpy']:
+        print("\n✅ ODT Conversion:")
+        print("  • odt - Requires: pip install odfpy")
+    else:
+        print("\n❌ ODT Conversion:")
+        print("  • odt - Install with: pip install odfpy")
+    
+    print("\n✅ RTF Conversion:")
+    print("  • rtf - Native support, no dependencies")
+    
+    print(f"\n📋 Summary:")
+    available_formats = converter.get_available_formats()
+    print(f"  Available formats: {', '.join(available_formats)}")
+    
+    if len(available_formats) == 1:
+        print("  💡 Install additional libraries to enable more formats!")
+    else:
+        print(f"  🎉 {len(available_formats)} formats available!")
+
+
 def main():
     """Command-line interface for the converter"""
     parser = argparse.ArgumentParser(
-        description="Convert SRT/VTT subtitle files to well-formatted transcripts",
+        description="Convert subtitle files (SRT, VTT, ASS, SSA, SBV, TTML, SAMI, LRC) to well-formatted transcripts",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   python sub2trans.py input.srt                    # Creates input.md
   python sub2trans.py input.vtt                    # Creates input.md (VTT support)
+  python sub2trans.py input.ass                  # Creates input.md (ASS support)
+  python sub2trans.py input.sbv                  # Creates input.md (SBV support)
+  python sub2trans.py input.ttml                 # Creates input.md (TTML support)
   python sub2trans.py input.srt -o output.md      # Creates output.md
   python sub2trans.py input.vtt -o output.pdf      # Smart format detection (PDF)
   python sub2trans.py input.srt -t "My Video Transcript"  # Creates input.md with title
@@ -1526,20 +2606,36 @@ Examples:
   python sub2trans.py input.srt -o output.docx        # Smart format detection (Word)
   python sub2trans.py input.srt -o output.html        # Smart format detection (HTML)
 
-LM Studio Integration:
-  This tool can use LM Studio for enhanced processing:
+AI Integration:
+  This tool supports multiple AI providers for enhanced processing:
+  - LM Studio (local): Free, runs locally with your own models
+  - OpenAI (ChatGPT): Cloud-based, requires API key
+  - Anthropic (Claude): Cloud-based, requires API key  
+  - Grok (X.AI): Cloud-based, requires API key
+  - Google (Gemini): Cloud-based, requires API key
+  
+  Features:
   - Better paragraph grouping for long transcripts
   - AI-generated headlines and section titles
   - Improved content organization
   - Automatic model selection and fallback
   
-  The tool will automatically find and use the best available model.
-  Use --list-models to see what's available in your LM Studio instance.
+  Configuration:
+  - Use --setup-config to configure AI providers and default output format
+  - Config file: ~/sub2trans_config.json
+  - Use --ai-provider to override the default provider
+  - Set default output format in config file (markdown, html, pdf, docx, odt, rtf)
 
 Video URL Integration:
   Use -u/--video-url to create clickable timestamps that link to the video:
   - YouTube: Creates links with ?t=120s format
   - Vimeo: Creates links with #t=120.521 format
+  - Twitch: Creates links with ?t=120s format
+  - Dailymotion: Creates links with ?start=120 format
+  - Facebook: Creates links with ?t=120 format
+  - Rumble: Creates links with ?t=120 format
+  - Odysee: Creates links with ?t=120 format
+  - TikTok, Instagram, Twitter, LinkedIn: Base URLs (no timestamp support)
   - Timestamps will be clickable in the generated Markdown
         """
     )
@@ -1571,18 +2667,40 @@ Video URL Integration:
                        help='Disable headline generation (output raw transcript)')
     parser.add_argument('-f', '--format', choices=['markdown', 'html', 'pdf', 'docx', 'odt', 'rtf'], 
                        default='markdown', help='Output format (default: markdown)')
-    parser.add_argument('--pandoc-path', default='pandoc',
-                       help='Path to pandoc executable (default: pandoc)')
+    parser.add_argument('--list-formats', action='store_true',
+                       help='List available output formats and required libraries')
     parser.add_argument('-u', '--video-url', 
                        help='Video URL (YouTube or Vimeo) to create clickable timestamps')
     parser.add_argument('--list-models', action='store_true',
                        help='List available models in LM Studio and exit')
+    parser.add_argument('--config', help='Path to configuration file (default: ~/sub2trans_config.json)')
+    parser.add_argument('--ai-provider', choices=['lm_studio', 'openai', 'anthropic', 'grok', 'google'],
+                       help='AI provider to use (overrides config file)')
+    parser.add_argument('--setup-config', action='store_true',
+                       help='Setup configuration file interactively')
+    parser.add_argument('--show-config', action='store_true',
+                       help='Show current configuration and exit')
     
     args = parser.parse_args()
     
     # Set global verbosity
     global VERBOSE
     VERBOSE = args.verbose
+    
+    # Handle setup-config option
+    if args.setup_config:
+        setup_configuration(args.config)
+        sys.exit(0)
+    
+    # Handle show-config option
+    if args.show_config:
+        show_configuration(args.config)
+        sys.exit(0)
+    
+    # Handle list-formats option
+    if args.list_formats:
+        list_available_formats()
+        sys.exit(0)
     
     # Handle batch processing
     if args.batch:
@@ -1609,7 +2727,28 @@ Video URL Integration:
     
     # Handle --list-models option
     if args.list_models:
-        lm_client = LMStudioClient(args.lm_studio_url, args.model)
+        # This section needs to be updated to use the new AI client system
+        # For now, we'll skip the list-models functionality for non-LM Studio providers
+        if args.ai_provider and args.ai_provider != "lm_studio":
+            print(f"List models not supported for {args.ai_provider}")
+            sys.exit(0)
+        
+        # Create a temporary AI client for LM Studio
+        config_manager = ConfigManager(args.config)
+        provider_config = config_manager.get_provider_config("lm_studio")
+        if not provider_config:
+            print("LM Studio not configured")
+            sys.exit(1)
+        
+        # Override with command line options
+        if args.lm_studio_url:
+            provider_config = provider_config.copy()
+            provider_config["base_url"] = args.lm_studio_url
+        if args.model:
+            provider_config = provider_config.copy()
+            provider_config["default_model"] = args.model
+        
+        lm_client = AIClient("lm_studio", provider_config)
         if lm_client.is_available():
             models = lm_client.get_available_models()
             if models:
@@ -1623,18 +2762,30 @@ Video URL Integration:
             print(f"Make sure LM Studio is running at {args.lm_studio_url}")
         sys.exit(0)
     
+    # Determine output format (use config default if not specified)
+    output_format = args.format
+    if output_format == "markdown":  # Only use config default if user didn't specify a format
+        try:
+            config_manager = ConfigManager(args.config)
+            config_output = config_manager.get_output_config()
+            output_format = config_output.get("default_format", "markdown")
+            if VERBOSE:
+                print(f"Using default format from config: {output_format}")
+        except:
+            pass  # Keep original format if config fails
+    
     # Create converter
     if args.no_ai:
-        # Create a dummy LM client that's not available
-        class DummyLMClient:
+        # Create a dummy AI client that's not available
+        class DummyAIClient:
             def is_available(self): return False
-        dummy_client = DummyLMClient()
-        converter = SRTToMarkdownConverter(args.max_gap, args.min_length, "dummy", "dummy", args.video_url, False, args.no_headlines, args.format, args.pandoc_path)
-        converter.lm_client = dummy_client
+        dummy_client = DummyAIClient()
+        converter = SRTToMarkdownConverter(args.max_gap, args.min_length, "dummy", "dummy", args.video_url, False, args.no_headlines, output_format, args.config, None)
+        converter.ai_client = dummy_client
         converter.grouper.lm_client = dummy_client
         converter.formatter.headline_generator.lm_client = dummy_client
     else:
-        converter = SRTToMarkdownConverter(args.max_gap, args.min_length, args.lm_studio_url, args.model, args.video_url, args.wait_for_model, args.no_headlines, args.format, args.pandoc_path)
+        converter = SRTToMarkdownConverter(args.max_gap, args.min_length, args.lm_studio_url, args.model, args.video_url, args.wait_for_model, args.no_headlines, output_format, args.config, args.ai_provider)
     
     try:
         if args.preview:

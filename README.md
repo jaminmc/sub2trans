@@ -1,194 +1,398 @@
-# Sub2Trans - Subtitle to Transcript Converter
+# Sub2Trans - Advanced Subtitle to Transcript Converter
 
-A powerful Python tool that converts SRT/VTT subtitle files into well-formatted transcripts with AI-enhanced paragraph grouping, intelligent headline generation, and video timestamp integration.
+A powerful Python tool that converts subtitle files into well-formatted transcripts with AI-enhanced processing, multi-platform video support, and comprehensive configuration options.
 
-## Features
+## ✨ Features
 
-- **🤖 AI-Enhanced Processing**: Uses LM Studio integration for intelligent paragraph detection and headline generation
-- **📝 Smart Paragraph Grouping**: Automatically groups consecutive subtitles into logical paragraphs using AI analysis
-- **⏰ Timestamp Markers**: Each paragraph includes clickable timestamps that link to video positions
-- **📋 Selective Headlines**: Generates headlines only for major sections (introduction, topic changes, conclusion)
-- **🎥 Video Integration**: Creates clickable timestamps for YouTube and Vimeo videos
-- **📊 Progress Tracking**: Visual progress bars for long file processing
-- **🔄 Batch Processing**: Process multiple SRT files at once
-- **⚙️ Flexible Options**: Verbose/quiet modes, headline control, and model selection
+### 🤖 **Multi-AI Provider Support**
+- **LM Studio** (local) - Free, runs locally with your own models
+- **OpenAI** (ChatGPT) - Cloud-based, requires API key
+- **Anthropic** (Claude) - Cloud-based, requires API key  
+- **Grok** (X.AI) - Cloud-based, requires API key
+- **Google** (Gemini) - Cloud-based, requires API key
 
-## Installation
+### 📝 **Comprehensive Subtitle Format Support**
+- **SRT** (SubRip Subtitle) - Most common format
+- **VTT** (WebVTT) - Web video format
+- **ASS/SSA** (Advanced SubStation Alpha) - Anime and styled subtitles
+- **SBV** (SubViewer) - YouTube format
+- **TTML/DFXP** (Timed Text Markup Language) - Broadcast format
+- **SAMI** (Synchronized Accessible Media Interchange) - Microsoft format
+- **LRC** (Lyric File) - Music synchronization
+
+### 🎥 **Multi-Platform Video Integration**
+- **YouTube** - Clickable timestamps with `?t=120s` format
+- **Vimeo** - Clickable timestamps with `#t=120.521` format
+- **Twitch** - Clickable timestamps with `?t=120s` format
+- **Dailymotion** - Clickable timestamps with `?start=120` format
+- **Facebook** - Clickable timestamps with `?t=120` format
+- **Rumble** - Clickable timestamps with `?t=120` format
+- **Odysee** - Clickable timestamps with `?t=120` format
+- **TikTok, Instagram, Twitter, LinkedIn** - Base URLs (no timestamp support)
+
+### ⚙️ **Configuration System**
+- **Global Configuration**: `~/sub2trans_config.json` (accessible from anywhere)
+- **Interactive Setup**: `--setup-config` for guided configuration
+- **Default Output Format**: Set your preferred format once
+- **AI Provider Management**: Configure multiple providers with API keys
+- **Processing Settings**: Customize paragraph grouping and processing options
+
+### 📊 **Advanced Processing**
+- **Smart Paragraph Grouping**: AI-powered paragraph detection
+- **Selective Headlines**: Generates headlines only for major sections
+- **Progress Tracking**: Visual progress bars for long files
+- **Batch Processing**: Process multiple files at once
+- **Multiple Output Formats**: Markdown, HTML, PDF, DOCX, ODT, RTF
+
+### 🐍 **Python-Native Conversion**
+- **No External Dependencies**: No Pandoc or system tools required
+- **Pure Python**: All conversion happens in Python
+- **Optional Libraries**: Install only what you need
+- **Automatic Detection**: Checks which formats are available
+- **Graceful Fallback**: Falls back to markdown if conversion fails
+- **Cross-Platform**: Works on any system with Python
+
+## 🚀 Installation
 
 ### Basic Installation
 ```bash
-git clone <repository-url>
+# Clone the repository
+git clone https://github.com/jaminmc/sub2trans.git
 cd sub2trans
+
+# Windows users can also download the ZIP file and extract it
 ```
 
 ### Dependencies
-- **Python 3.6+**
-- **tqdm** (for progress bars): `pip install tqdm`
-- **requests** (for LM Studio): `pip install requests`
-
-### LM Studio Setup (Optional)
-For AI-enhanced processing, install and run [LM Studio](https://lmstudio.ai/):
-1. Download and install LM Studio
-2. Load a compatible model (recommended: `qwen/qwen3-4b-2507`)
-3. Start the local server (usually `http://localhost:1234`)
-
-## Usage
-
-### Basic Usage
-
 ```bash
-# Convert SRT to Markdown (creates input.md)
+# Install core dependencies
+pip install tqdm requests
+
+# Windows users: If you get permission errors, use:
+# pip install --user tqdm requests
+```
+
+### Optional Dependencies (Python-Native)
+- **HTML Output**: `pip install markdown`
+- **PDF Output**: `pip install weasyprint` (recommended) or `pip install reportlab`
+- **DOCX Output**: `pip install python-docx`
+- **ODT Output**: `pip install odfpy`
+- **LM Studio** (for local AI): [Download LM Studio](https://lmstudio.ai/)
+
+### Windows-Specific Notes
+- **Path Handling**: All paths use `pathlib.Path` for cross-platform compatibility
+- **Configuration**: Stored in `%USERPROFILE%\sub2trans_config.json` on Windows
+- **Python Path**: Make sure Python is in your PATH or use `python` instead of `python3`
+- **Permissions**: Use `--user` flag if you get permission errors: `pip install --user package_name`
+
+### No External Dependencies Required
+- **Markdown & RTF**: Always available (no dependencies)
+- **Python-Native**: All conversion happens in Python
+- **Optional Libraries**: Install only what you need
+
+## 📖 Usage
+
+### Quick Start
+```bash
+# Convert subtitle to transcript
 python sub2trans.py input.srt
 
-# Save to specific file
-python sub2trans.py input.srt -o output.md
-
-# Add custom title
-python sub2trans.py input.srt -t "My Video Transcript"
-```
-
-### AI-Enhanced Processing
-
-```bash
-# Use AI for better paragraph detection (requires LM Studio)
-python sub2trans.py input.srt --model "qwen/qwen3-4b-2507"
-
-# Wait for model to load
-python sub2trans.py input.srt --wait-for-model
-
-# Disable AI processing (use fallback rules)
-python sub2trans.py input.srt --no-ai
-```
-
-### Video Integration
-
-```bash
-# Create clickable YouTube timestamps
+# With video timestamps
 python sub2trans.py input.srt -u "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 
-# Create clickable Vimeo timestamps
+# Convert to PDF
+python sub2trans.py input.srt -f pdf
+```
+
+### Windows Usage
+```cmd
+# Windows Command Prompt
+python sub2trans.py input.srt
+
+# If python3 doesn't work, try:
+python sub2trans.py input.srt
+
+# PowerShell
+python sub2trans.py input.srt -f pdf
+
+# Alternative if Python is not in PATH:
+C:\Python39\python.exe sub2trans.py input.srt
+```
+
+### Configuration Setup
+```bash
+# Interactive configuration setup
+python sub2trans.py --setup-config
+
+# View current configuration
+python sub2trans.py --show-config
+
+# Use custom config file
+python sub2trans.py input.srt --config /path/to/config.json
+```
+
+### AI Provider Selection
+```bash
+# Use OpenAI ChatGPT
+python sub2trans.py input.srt --ai-provider openai
+
+# Use Anthropic Claude
+python sub2trans.py input.srt --ai-provider anthropic
+
+# Use Grok
+python sub2trans.py input.srt --ai-provider grok
+
+# Use Google Gemini
+python sub2trans.py input.srt --ai-provider google
+
+# Use LM Studio (default)
+python sub2trans.py input.srt --ai-provider lm_studio
+```
+
+### Subtitle Format Examples
+```bash
+# SRT files
+python sub2trans.py input.srt
+
+# VTT files
+python sub2trans.py input.vtt
+
+# ASS/SSA files (anime subtitles)
+python sub2trans.py anime.ass
+
+# SBV files (YouTube subtitles)
+python sub2trans.py youtube.sbv
+
+# TTML files (broadcast subtitles)
+python sub2trans.py broadcast.ttml
+
+# SAMI files (multilingual content)
+python sub2trans.py multilingual.smi
+
+# LRC files (lyrics)
+python sub2trans.py song.lrc
+```
+
+### Output Format Examples
+```bash
+# Markdown (default, no dependencies)
+python sub2trans.py input.srt
+
+# HTML (requires: pip install markdown)
+python sub2trans.py input.srt -f html
+
+# PDF (requires: pip install weasyprint)
+python sub2trans.py input.srt -f pdf
+
+# Microsoft Word (requires: pip install python-docx)
+python sub2trans.py input.srt -f docx
+
+# OpenDocument (requires: pip install odfpy)
+python sub2trans.py input.srt -f odt
+
+# Rich Text Format (no dependencies)
+python sub2trans.py input.srt -f rtf
+```
+
+### Check Available Formats
+```bash
+# See which formats are available with your installed libraries
+python sub2trans.py --list-formats
+```
+
+### Video Platform Examples
+```bash
+# YouTube
+python sub2trans.py input.srt -u "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+
+# Vimeo
 python sub2trans.py input.srt -u "https://vimeo.com/123456789"
-```
 
-### Batch Processing
+# Twitch
+python sub2trans.py input.srt -u "https://www.twitch.tv/videos/123456789"
 
-```bash
-# Process all SRT files in current directory
-python sub2trans.py --batch
+# Dailymotion
+python sub2trans.py input.srt -u "https://www.dailymotion.com/video/x123456"
 
-# Batch with specific settings
-python sub2trans.py --batch --model "qwen/qwen3-4b-2507" --verbose
-```
+# Facebook
+python sub2trans.py input.srt -u "https://www.facebook.com/watch/?v=123456789"
 
-### Output Control
+# Rumble
+python sub2trans.py input.srt -u "https://rumble.com/v123456789"
 
-```bash
-# Disable headlines (raw transcript)
-python sub2trans.py input.srt --no-headlines
-
-# Verbose output for debugging
-python sub2trans.py input.srt --verbose
-
-# Quiet mode for scripts
-python sub2trans.py input.srt --quiet
+# Odysee
+python sub2trans.py input.srt -u "https://odysee.com/@channel/video-title"
 ```
 
 ### Advanced Options
-
 ```bash
 # Custom paragraph grouping
 python sub2trans.py input.srt --max-gap 5.0 --min-length 30
 
+# Disable headlines
+python sub2trans.py input.srt --no-headlines
+
+# Verbose output
+python sub2trans.py input.srt --verbose
+
+# Batch processing
+python sub2trans.py --batch
+
 # Preview mode
 python sub2trans.py input.srt --preview
-
-# List available models
-python sub2trans.py --list-models
 ```
 
-## Command Line Options
+## ⚙️ Configuration
+
+### Configuration File Location
+- **Default**: `~/sub2trans_config.json` (global, accessible from anywhere)
+- **Custom**: Use `--config /path/to/config.json`
+- **Global Access**: Works from any directory on your system
+
+### Interactive Setup
+```bash
+python sub2trans.py --setup-config
+```
+
+This will guide you through:
+- Setting default AI provider
+- Configuring API keys for cloud providers
+- Setting default output format
+- Configuring processing options
+
+### Configuration File Structure
+```json
+{
+  "ai_providers": {
+    "lm_studio": {
+      "enabled": true,
+      "base_url": "http://localhost:1234",
+      "default_model": "qwen/qwen3-4b-2507",
+      "timeout": 120,
+      "max_retries": 3
+    },
+    "openai": {
+      "enabled": false,
+      "api_key": "",
+      "base_url": "https://api.openai.com/v1",
+      "default_model": "gpt-3.5-turbo",
+      "timeout": 60,
+      "max_retries": 3
+    },
+    "anthropic": {
+      "enabled": false,
+      "api_key": "",
+      "base_url": "https://api.anthropic.com",
+      "default_model": "claude-3-haiku-20240307",
+      "timeout": 60,
+      "max_retries": 3
+    },
+    "grok": {
+      "enabled": false,
+      "api_key": "",
+      "base_url": "https://api.x.ai/v1",
+      "default_model": "grok-beta",
+      "timeout": 60,
+      "max_retries": 3
+    },
+    "google": {
+      "enabled": false,
+      "api_key": "",
+      "base_url": "https://generativelanguage.googleapis.com/v1beta",
+      "default_model": "gemini-pro",
+      "timeout": 60,
+      "max_retries": 3
+    }
+  },
+  "default_provider": "lm_studio",
+  "processing": {
+    "max_gap_seconds": 3.0,
+    "min_paragraph_length": 10,
+    "wait_for_model": false,
+    "no_headlines": false,
+    "verbose": false
+  },
+  "output": {
+    "default_format": "markdown",
+    "pandoc_path": "pandoc",
+    "auto_detect_format": true,
+    "preferred_formats": ["markdown", "html", "pdf", "docx"]
+  }
+}
+```
+
+## 📋 Command Line Options
 
 ### Core Options
-- `input_file`: Path to the input SRT file (required unless using `--batch` or `--list-models`)
-- `-o, --output`: Output Markdown file path (default: same as input with .md extension)
+- `input_file`: Path to input subtitle file (required unless using `--batch` or `--list-models`)
+- `-o, --output`: Output file path (default: same as input with appropriate extension)
 - `-t, --title`: Custom title for the document
 - `--preview`: Preview the first few paragraphs without saving
 
-### AI Processing
-- `--model`: Model name to use with LM Studio (default: `qwen/qwen3-4b-2507`)
-- `--lm-studio-url`: LM Studio API URL (default: `http://localhost:1234`)
+### AI Configuration
+- `--ai-provider`: AI provider to use (lm_studio, openai, anthropic, grok, google)
+- `--model`: Model name to use (overrides config)
+- `--lm-studio-url`: LM Studio API URL (default: http://localhost:1234)
 - `--wait-for-model`: Wait for model to load before processing
 - `--no-ai`: Disable AI processing and use fallback methods only
 - `--list-models`: List available models in LM Studio and exit
 
+### Configuration Management
+- `--config`: Path to configuration file (default: ~/.sub2trans_config.json)
+- `--setup-config`: Setup configuration file interactively
+- `--show-config`: Show current configuration and exit
+
 ### Output Control
+- `-f, --format`: Output format (markdown, html, pdf, docx, odt, rtf)
 - `--no-headlines`: Disable headline generation (output raw transcript)
+- `--pandoc-path`: Path to pandoc executable (default: pandoc)
 - `-v, --verbose`: Enable verbose output
 - `-q, --quiet`: Suppress non-essential output
 
 ### Processing Options
 - `--max-gap`: Maximum gap in seconds between subtitles to group into paragraphs (default: 3.0)
 - `--min-length`: Minimum paragraph length in characters (default: 10)
-- `--batch`: Process all SRT files in current directory
+- `--batch`: Process all subtitle files in current directory
 
 ### Video Integration
-- `-u, --video-url`: Video URL (YouTube or Vimeo) to create clickable timestamps
+- `-u, --video-url`: Video URL to create clickable timestamps
 
-## How It Works
+## 🎯 How It Works
 
-### 1. SRT Parsing
-- Parses SRT files with proper timestamp extraction
-- Handles various encoding formats (UTF-8, Latin-1)
-- Extracts subtitle text and timing information
+### 1. Subtitle Parsing
+- **Multi-Format Support**: Automatically detects and parses various subtitle formats
+- **Encoding Handling**: Supports UTF-8, Latin-1, and other encodings
+- **Time Format Conversion**: Converts different time formats to standard seconds
+- **Content Cleaning**: Removes formatting codes and normalizes text
 
-### 2. AI-Enhanced Paragraph Grouping
-The tool uses multiple approaches for paragraph detection:
-
-**AI-Powered (with LM Studio):**
+### 2. AI-Enhanced Processing
+**AI-Powered (with configured provider):**
 - **Smart Analysis**: Uses AI to detect natural conversation breaks
-- **Content Understanding**: Analyzes context for better grouping
+- **Content Understanding**: Analyzes context for better paragraph grouping
+- **Headline Generation**: Creates meaningful section titles
 - **Progress Tracking**: Visual progress bars for long files
 
 **Rule-Based Fallback:**
-- **Timing gaps**: Subtitles with gaps longer than threshold start new paragraphs
-- **Speaker changes**: Detects potential speaker changes based on text patterns
-- **Topic changes**: Identifies topic shifts using keyword analysis
+- **Timing Analysis**: Groups subtitles based on time gaps
+- **Speaker Detection**: Identifies potential speaker changes
+- **Topic Analysis**: Detects topic shifts using keyword analysis
+- **Pattern Recognition**: Uses linguistic patterns for grouping
 
-### 3. Selective Headline Generation
-Generates headlines only for major sections:
-- **Introduction**: First paragraph
-- **Topic Changes**: When conversation shifts to new subjects
-- **Conclusion**: Last paragraph
-- **AI Detection**: Uses AI to identify significant topic transitions
+### 3. Video Integration
+- **Platform Detection**: Automatically identifies video platform from URL
+- **Timestamp Generation**: Creates platform-specific timestamp URLs
+- **Clickable Links**: Generates clickable timestamp markers in output
+- **Fallback Support**: Handles platforms without timestamp support
 
-### 4. Video Integration
-- **YouTube**: Creates clickable timestamps (`?t=120s`)
-- **Vimeo**: Creates clickable timestamps (`#t=120.521`)
-- **Automatic Detection**: Identifies platform from URL
+### 4. Output Formatting
+- **Format Detection**: Automatically detects output format from file extension
+- **Pandoc Integration**: Uses Pandoc for advanced format conversion
+- **Clean Markdown**: Generates well-structured Markdown output
+- **Timestamp Integration**: Embeds clickable timestamps in output
 
-### 5. Markdown Formatting
-- Creates clean, readable Markdown with proper structure
-- Adds clickable timestamp markers for each paragraph
-- Uses proper heading hierarchy
-- Includes line breaks between paragraphs
+## 📄 Example Output
 
-## Example Output
-
-### With Headlines (Default)
-```markdown
-# Interview with Dr. Keppel
-
-## Introduction *(0:00)*
-**0:00** I am rolling on the camera. You can't relate. That's funny. Cut. Just give us audio. We'll get him to say his name.
-
-## Opening Discussion *(1:12)*
-**1:12** So, we'll go over a list of questions and elaborate or make them as short as you need to.
-
-## Questions & Discussion *(3:21)*
-**3:21** But at that time, I didn't really know a whole lot about the difference between food supplements and man-made chemical supplements, right?
-```
-
-### With Video Integration
+### With Headlines and Video Integration
 ```markdown
 # Interview with Dr. Keppel
 
@@ -197,6 +401,9 @@ Generates headlines only for major sections:
 
 ## Opening Discussion *(1:12)*
 [**1:12**](https://www.youtube.com/watch?v=dQw4w9WgXcQ?t=72s) So, we'll go over a list of questions and elaborate or make them as short as you need to.
+
+## Questions & Discussion *(3:21)*
+[**3:21**](https://www.youtube.com/watch?v=dQw4w9WgXcQ?t=201s) But at that time, I didn't really know a whole lot about the difference between food supplements and man-made chemical supplements, right?
 ```
 
 ### Without Headlines (`--no-headlines`)
@@ -210,60 +417,164 @@ Generates headlines only for major sections:
 **3:21** But at that time, I didn't really know a whole lot about the difference between food supplements and man-made chemical supplements, right?
 ```
 
-## Performance Tips
+## 🔧 Performance Tips
 
 ### For Large Files
 - Use `--verbose` to monitor progress
 - Consider `--no-headlines` for faster processing
-- Use `--wait-for-model` when switching models
+- Use `--wait-for-model` when switching AI models
 
 ### For Batch Processing
 - Use `--batch` for multiple files
 - Combine with `--quiet` for script automation
 - Monitor with `--verbose` for debugging
 
-### AI Model Selection
-- **qwen/qwen3-4b-2507**: Fast, reliable (default)
-- **gpt-oss-20b**: More powerful but slower
-- Use `--list-models` to see available options
+### AI Provider Selection
+- **LM Studio**: Free, local processing, good for privacy
+- **OpenAI**: Fast, reliable, requires API key
+- **Anthropic**: High quality, good for complex content
+- **Grok**: Good for creative content, requires API key
+- **Google**: Fast and efficient, requires API key
 
-## Troubleshooting
+## 🐛 Troubleshooting
 
 ### Common Issues
-- **Model not loading**: Use `--wait-for-model` or check LM Studio
-- **No AI processing**: Ensure LM Studio is running and model is loaded
-- **Slow processing**: Try `--no-headlines` or use a faster model
+- **AI not available**: Check provider configuration and API keys
+- **Format conversion fails**: Install required Python libraries (see `--list-formats`)
+- **Slow processing**: Try `--no-headlines` or use a faster AI provider
+- **Video timestamps not working**: Check URL format and platform support
+- **Missing output formats**: Install optional libraries (e.g., `pip install weasyprint` for PDF)
+
+### Windows-Specific Issues
+- **Permission denied**: Use `pip install --user package_name` instead of `pip install package_name`
+- **Python not found**: Make sure Python is in your PATH, or use full path to python.exe
+- **Path issues**: All paths are handled automatically with `pathlib.Path`
+- **Configuration location**: Check `%USERPROFILE%\sub2trans_config.json` for config file
+- **WeasyPrint issues**: On Windows, you may need to install additional dependencies for PDF generation
 
 ### Getting Help
 ```bash
 # See all options
 python sub2trans.py --help
 
-# List available models
-python sub2trans.py --list-models
+# View current configuration
+python sub2trans.py --show-config
 
 # Test with preview
 python sub2trans.py input.srt --preview
+
+# List available models (LM Studio only)
+python sub2trans.py --list-models
 ```
 
-## File Structure
+## 📁 File Structure
 
 ```
 sub2trans/
-├── sub2trans.py       # Main converter script
-├── README.md          # This documentation
-├── .gitignore         # Git ignore file
-└── output.md          # Generated Markdown file
+├── sub2trans.py              # Main converter script
+├── README.md                 # This documentation
+├── .gitignore               # Git ignore file
+├── sub2trans_config.json    # Configuration file (auto-created)
+└── output.md                # Generated transcript file
 ```
 
-## Requirements
+## 📦 Requirements
 
+### Core Dependencies
 - **Python 3.6+**
 - **tqdm**: `pip install tqdm`
 - **requests**: `pip install requests`
-- **LM Studio** (optional, for AI features)
 
-## License
+### Optional Dependencies (Python-Native)
+- **markdown**: For HTML output (`pip install markdown`)
+- **weasyprint**: For PDF output (`pip install weasyprint`)
+- **python-docx**: For DOCX output (`pip install python-docx`)
+- **odfpy**: For ODT output (`pip install odfpy`)
+- **LM Studio**: For local AI processing
+- **API Keys**: For cloud AI providers (OpenAI, Anthropic, Grok, Google)
 
-This tool is provided as-is for converting SRT subtitle files to Markdown format.
+### No External Dependencies
+- **No Pandoc required**: All conversion happens in Python
+- **No system dependencies**: Pure Python implementation
+- **Optional libraries**: Install only what you need
 
+## 🚀 Quick Start Examples
+
+### Basic Conversion
+```bash
+python sub2trans.py input.srt
+```
+
+### With Video Timestamps
+```bash
+python sub2trans.py input.srt -u "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+```
+
+### Convert to PDF
+```bash
+python sub2trans.py input.srt -f pdf
+```
+
+### Use OpenAI ChatGPT
+```bash
+python sub2trans.py input.srt --ai-provider openai
+```
+
+### Setup Configuration
+```bash
+# Interactive setup (creates ~/sub2trans_config.json)
+python sub2trans.py --setup-config
+
+# View current configuration
+python sub2trans.py --show-config
+
+# Check available output formats
+python sub2trans.py --list-formats
+```
+
+## 📄 License
+
+This project is licensed under the BSD 3-Clause License. See the [LICENSE](LICENSE) file for details.
+
+### Key Points:
+- **Commercial Use**: ✅ Allowed
+- **Modification**: ✅ Allowed  
+- **Distribution**: ✅ Allowed
+- **Private Use**: ✅ Allowed
+- **Attribution**: ✅ Required
+- **Liability**: ❌ No warranty provided
+
+### Quick Summary:
+You are free to use, modify, and distribute this software for any purpose, including commercial use, as long as you include the original copyright notice and license text. This is a simple, permissive license that's very developer-friendly.
+
+---
+
+## 🎯 Why Sub2Trans?
+
+### **🚀 Modern Python-Native Approach**
+- **No External Dependencies**: No need to install Pandoc or system tools
+- **Pure Python**: All conversion happens in Python for maximum compatibility
+- **Optional Libraries**: Install only the formats you need
+- **Cross-Platform**: Works on Windows, macOS, Linux without system dependencies
+
+### **🤖 Multi-AI Provider Support**
+- **Local AI**: Use LM Studio with your own models (free)
+- **Cloud AI**: Integrate with OpenAI, Anthropic, Grok, Google
+- **Flexible**: Switch between providers based on your needs
+- **Cost-Effective**: Choose between free local or paid cloud options
+
+### **📝 Comprehensive Format Support**
+- **8 Subtitle Formats**: SRT, VTT, ASS, SSA, SBV, TTML, SAMI, LRC
+- **6 Output Formats**: Markdown, HTML, PDF, DOCX, ODT, RTF
+- **10+ Video Platforms**: YouTube, Vimeo, Twitch, Facebook, and more
+- **Smart Detection**: Automatically detects formats and platforms
+
+### **⚙️ Professional Configuration**
+- **Global Settings**: Configuration accessible from anywhere (`~/sub2trans_config.json`)
+- **Interactive Setup**: Guided configuration with `--setup-config`
+- **Default Formats**: Set your preferred output format once
+- **AI Management**: Configure multiple AI providers with API keys
+
+---
+
+**Sub2Trans** - Transform your subtitles into professional transcripts with AI-powered intelligence and multi-platform support.
