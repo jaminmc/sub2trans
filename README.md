@@ -63,7 +63,7 @@ cd sub2trans
 # Windows users can also download the ZIP file and extract it
 ```
 
-### Dependencies
+### Core Dependencies (Required)
 ```bash
 # Install core dependencies
 pip install tqdm requests
@@ -72,12 +72,38 @@ pip install tqdm requests
 # pip install --user tqdm requests
 ```
 
-### Optional Dependencies (Python-Native)
-- **HTML Output**: `pip install markdown`
-- **PDF Output**: `pip install weasyprint` (recommended) or `pip install reportlab`
-- **DOCX Output**: `pip install python-docx`
-- **ODT Output**: `pip install odfpy`
-- **LM Studio** (for local AI): [Download LM Studio](https://lmstudio.ai/)
+### Optional Dependencies (For Output Formats)
+```bash
+# For HTML output
+pip install markdown
+
+# For PDF output (recommended)
+pip install weasyprint
+
+# For PDF output (alternative)
+pip install reportlab
+
+# For DOCX output (Microsoft Word)
+pip install python-docx
+
+# For ODT output (OpenDocument)
+pip install odfpy
+
+# Install all optional dependencies at once
+pip install markdown weasyprint python-docx odfpy
+```
+
+### AI Provider Dependencies
+```bash
+# For local AI (LM Studio)
+# Download from: https://lmstudio.ai/
+
+# For cloud AI providers, you only need API keys:
+# - OpenAI: Get API key from https://platform.openai.com/
+# - Anthropic: Get API key from https://console.anthropic.com/
+# - Grok: Get API key from https://console.x.ai/
+# - Google: Get API key from https://aistudio.google.com/
+```
 
 ### Windows-Specific Notes
 - **Path Handling**: All paths use `pathlib.Path` for cross-platform compatibility
@@ -85,10 +111,46 @@ pip install tqdm requests
 - **Python Path**: Make sure Python is in your PATH or use `python` instead of `python3`
 - **Permissions**: Use `--user` flag if you get permission errors: `pip install --user package_name`
 
+### Format Availability by Dependencies
+
+| Output Format | Required Library | Always Available |
+|---------------|------------------|------------------|
+| **Markdown** | None | ✅ Yes |
+| **RTF** | None | ✅ Yes |
+| **HTML** | `pip install markdown` | ❌ No |
+| **PDF** | `pip install weasyprint` or `pip install reportlab` | ❌ No |
+| **DOCX** | `pip install python-docx` | ❌ No |
+| **ODT** | `pip install odfpy` | ❌ No |
+
+### Quick Installation Guide
+```bash
+# 1. Install core dependencies
+pip install tqdm requests
+
+# 2. Check what formats are available
+python sub2trans.py --list-formats
+
+# 3. Install additional formats as needed
+pip install markdown weasyprint python-docx
+
+# 4. Check formats again
+python sub2trans.py --list-formats
+
+# 5. Setup configuration
+python sub2trans.py --setup-config
+```
+
+### Check Available Formats
+```bash
+# See which formats are available with your current setup
+python sub2trans.py --list-formats
+```
+
 ### No External Dependencies Required
 - **Markdown & RTF**: Always available (no dependencies)
 - **Python-Native**: All conversion happens in Python
 - **Optional Libraries**: Install only what you need
+- **Graceful Fallback**: Falls back to markdown if conversion fails
 
 ## 📖 Usage
 
@@ -444,6 +506,14 @@ This will guide you through:
 - **Slow processing**: Try `--no-headlines` or use a faster AI provider
 - **Video timestamps not working**: Check URL format and platform support
 - **Missing output formats**: Install optional libraries (e.g., `pip install weasyprint` for PDF)
+
+### Missing Dependencies Issues
+- **"No conversion libraries available"**: Install required libraries (see `--list-formats`)
+- **"HTML conversion failed"**: Run `pip install markdown`
+- **"PDF conversion failed"**: Run `pip install weasyprint` (recommended) or `pip install reportlab`
+- **"DOCX conversion failed"**: Run `pip install python-docx`
+- **"ODT conversion failed"**: Run `pip install odfpy`
+- **Format not available**: Check `python sub2trans.py --list-formats` to see what's installed
 
 ### Windows-Specific Issues
 - **Permission denied**: Use `pip install --user package_name` instead of `pip install package_name`
